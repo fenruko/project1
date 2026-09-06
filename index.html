@@ -1,108 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat Platform</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app">
-    <!-- Auth Screen -->
-    <div id="auth-screen" class="screen">
-      <div class="auth-card">
-        <h2>Welcome to Chat Platform</h2>
-        <div class="tab-buttons">
-          <button id="tab-login" class="tab-btn active" onclick="switchAuthTab('login')">Login</button>
-          <button id="tab-signup" class="tab-btn" onclick="switchAuthTab('signup')">Sign Up</button>
-        </div>
-        
-        <form id="auth-form" onsubmit="handleAuth(event)">
-          <div class="input-group">
-            <label for="username">Username</label>
-            <input type="text" id="username" required autocomplete="username">
-          </div>
-          <div class="input-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" required autocomplete="current-password">
-          </div>
-          <button type="submit" id="auth-submit-btn" class="primary-btn">Login</button>
-        </form>
-        <p id="auth-error" class="error-msg"></p>
-      </div>
+
+<div id="auth-view" class="view">
+  <div class="card">
+    <h1>Chat</h1>
+    <input id="auth-username" placeholder="Username">
+    <input id="auth-password" type="password" placeholder="Password">
+    <div class="row">
+      <button id="btn-login">Log in</button>
+      <button id="btn-signup" class="secondary">Sign up</button>
+    </div>
+    <p id="auth-error" class="error"></p>
+  </div>
+</div>
+
+<div id="app-view" class="view hidden">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span id="me"></span>
+      <button id="btn-logout" class="link">Log out</button>
     </div>
 
-    <!-- Main Chat Screen -->
-    <div id="chat-screen" class="screen hidden">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <span id="user-display-name">User</span>
-          <button class="icon-btn" onclick="logout()" title="Logout">🚪</button>
-        </div>
+    <h3>My channels</h3>
+    <ul id="my-channels" class="channel-list"></ul>
 
-        <div class="sidebar-actions">
-          <button class="primary-btn sm" onclick="openModal('create-channel-modal')">+ New Channel</button>
-          <button class="secondary-btn sm" onclick="openModal('join-code-modal')">🔑 Join by Code</button>
-        </div>
+    <h3>Public channels</h3>
+    <ul id="public-channels" class="channel-list"></ul>
 
-        <div class="channel-section">
-          <h3>Your Channels</h3>
-          <ul id="my-channels-list" class="channel-list"></ul>
-        </div>
-
-        <div class="channel-section">
-          <h3>Public Channels</h3>
-          <ul id="public-channels-list" class="channel-list"></ul>
-        </div>
-      </aside>
-
-      <!-- Chat Main Area -->
-      <main class="chat-main">
-        <div class="chat-header">
-          <span id="current-channel-name">Select a channel</span>
-          <button id="voice-btn" class="btn hidden" onclick="toggleVoice()">Join Voice</button>
-        </div>
-
-        <div id="message-container" class="message-container"></div>
-
-        <form id="message-form" class="message-form" onsubmit="sendMessage(event)">
-          <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" disabled>
-          <button type="submit" id="send-btn" class="primary-btn" disabled>Send</button>
-        </form>
-      </main>
+    <div class="sidebar-actions">
+      <input id="new-channel-name" placeholder="New channel name">
+      <label><input type="checkbox" id="new-channel-private"> Private</label>
+      <button id="btn-create-channel">Create</button>
+    </div>
+    <div class="sidebar-actions">
+      <input id="invite-code" placeholder="Invite code">
+      <button id="btn-join-code">Join</button>
     </div>
   </div>
 
-  <!-- Create Channel Modal -->
-  <div id="create-channel-modal" class="modal hidden">
-    <div class="modal-content">
-      <h3>Create Channel</h3>
-      <input type="text" id="new-channel-name" placeholder="Channel Name">
-      <label class="checkbox-label">
-        <input type="checkbox" id="new-channel-private"> Make Private
-      </label>
-      <div class="modal-actions">
-        <button class="secondary-btn" onclick="closeModal('create-channel-modal')">Cancel</button>
-        <button class="primary-btn" onclick="createChannel()">Create</button>
-      </div>
+  <div class="main">
+    <div id="channel-header">Select a channel</div>
+    <div id="messages"></div>
+    <div id="composer" class="hidden">
+      <input id="message-input" placeholder="Type a message...">
+      <button id="btn-send">Send</button>
     </div>
   </div>
+</div>
 
-  <!-- Join by Code Modal -->
-  <div id="join-code-modal" class="modal hidden">
-    <div class="modal-content">
-      <h3>Join Private Channel</h3>
-      <input type="text" id="invite-code-input" placeholder="Enter Invite Code">
-      <div class="modal-actions">
-        <button class="secondary-btn" onclick="closeModal('join-code-modal')">Cancel</button>
-        <button class="primary-btn" onclick="joinByCode()">Join</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
