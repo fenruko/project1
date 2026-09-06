@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="auth-view" class="view">
+  <div class="card">
+    <h1>Chat</h1>
+    <input id="auth-username" placeholder="Username">
+    <input id="auth-password" type="password" placeholder="Password">
+    <div class="row">
+      <button id="btn-login">Log in</button>
+      <button id="btn-signup" class="secondary">Sign up</button>
+    </div>
+    <p id="auth-error" class="error"></p>
+  </div>
+</div>
+
+<div id="app-view" class="view hidden">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span id="me"></span>
+      <button id="btn-logout" class="link">Log out</button>
+    </div>
+
+    <h3>My channels</h3>
+    <ul id="my-channels" class="channel-list"></ul>
+
+    <h3>Public channels</h3>
+    <ul id="public-channels" class="channel-list"></ul>
+
+    <div class="sidebar-actions">
+      <input id="new-channel-name" placeholder="New channel name">
+      <label><input type="checkbox" id="new-channel-private"> Private</label>
+      <button id="btn-create-channel">Create</button>
+    </div>
+    <div class="sidebar-actions">
+      <input id="invite-code" placeholder="Invite code">
+      <button id="btn-join-code">Join</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="channel-header">Select a channel</div>
+    <div id="messages"></div>
+    <div id="composer" class="hidden">
+      <input id="message-input" placeholder="Type a message...">
+      <button id="btn-send">Send</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
