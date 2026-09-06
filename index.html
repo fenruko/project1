@@ -43,19 +43,37 @@
       <input id="invite-code" placeholder="Invite code">
       <button id="btn-join-code">Join</button>
     </div>
+
+    <div id="voice-panel" class="voice-panel hidden">
+      <div class="voice-panel-title">Voice connected</div>
+      <div id="voice-participants"></div>
+      <div class="voice-controls">
+        <button id="btn-mute" class="vc-btn" title="Mute">🎤</button>
+        <button id="btn-deafen" class="vc-btn" title="Deafen">🎧</button>
+        <button id="btn-leave-voice" class="vc-btn vc-leave" title="Leave">📞</button>
+      </div>
+    </div>
   </div>
 
   <div class="main">
-    <div id="channel-header">Select a channel</div>
+    <div id="channel-header">
+      <span id="channel-title">Select a channel</span>
+      <button id="btn-join-voice" class="hidden">🎙 Join Voice</button>
+    </div>
     <div id="messages"></div>
     <div id="composer" class="hidden">
+      <button id="btn-attach" title="Attach image or audio">📎</button>
+      <input id="file-input" type="file" accept="image/*,audio/*" class="hidden">
       <input id="message-input" placeholder="Type a message...">
       <button id="btn-send">Send</button>
     </div>
+    <div id="upload-progress" class="hidden"></div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="voice.js"></script>
 </body>
 </html>

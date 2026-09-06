@@ -2,6 +2,7 @@ import express from 'express';
 import { nanoid } from 'nanoid';
 import { pool } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { getDownloadUrl } from '../storage.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -86,7 +87,7 @@ router.get('/:id/messages', async (req, res) => {
   if (!isMember) return res.status(403).json({ error: 'Not a member of this channel' });
 
   const result = await pool.query(
-    `SELECT m.id, m.content, m.created_at, u.username
+    `SELECT m.id, m.content, m.attachment_url AS attachment_key, m.attachment_type, m.created_at, u.username
      FROM messages m
      JOIN users u ON u.id = m.user_id
      WHERE m.channel_id = $1
@@ -94,7 +95,15 @@ router.get('/:id/messages', async (req, res) => {
      LIMIT 50`,
     [req.params.id]
   );
-  res.json(result.rows.reverse());
+
+  const rows = await Promise.all(
+    result.rows.map(async (row) => ({
+      ...row,
+      attachment_url: row.attachment_key ? await getDownloadUrl(row.attachment_key) : null,
+    }))
+  );
+
+  res.json(rows.reverse());
 });
 
 export default router;

@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS messages (
   channel_id UUID REFERENCES channels(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
+  attachment_url TEXT,
+  attachment_type TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

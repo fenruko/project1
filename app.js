@@ -70,8 +70,25 @@ async function loadChannels() {
   $('my-channels').innerHTML = '';
   mine.forEach((c) => {
     const li = document.createElement('li');
-    li.textContent = (c.is_private ? '🔒 ' : '# ') + c.name;
-    li.onclick = () => openChannel(c);
+    const label = document.createElement('span');
+    label.textContent = (c.is_private ? '🔒 ' : '# ') + c.name;
+    label.onclick = () => openChannel(c);
+    li.appendChild(label);
+
+    if (c.is_private && c.invite_code) {
+      const copyBtn = document.createElement('button');
+      copyBtn.textContent = '📋';
+      copyBtn.title = 'Copy invite code';
+      copyBtn.className = 'link';
+      copyBtn.style.marginLeft = '6px';
+      copyBtn.onclick = (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(c.invite_code);
+        copyBtn.textContent = '✅';
+        setTimeout(() => (copyBtn.textContent = '📋'), 1200);
+      };
+      li.appendChild(copyBtn);
+    }
     $('my-channels').appendChild(li);
   });
 
@@ -113,11 +130,15 @@ $('btn-join-code').onclick = async () => {
 };
 
 // ---- Chat ----
+let lastRenderedMsg = null; // tracks last message group for consecutive-message grouping
+
 async function openChannel(channel) {
   currentChannel = channel;
-  $('channel-header').textContent = (channel.is_private ? '🔒 ' : '# ') + channel.name;
+  $('channel-title').textContent = (channel.is_private ? '🔒 ' : '# ') + channel.name;
   $('composer').classList.remove('hidden');
+  $('btn-join-voice').classList.remove('hidden');
   $('messages').innerHTML = '';
+  lastRenderedMsg = null;
 
   const history = await api(`/channels/${channel.id}/messages`);
   history.forEach(renderMessage);
@@ -140,13 +161,47 @@ function connectWS(channelId) {
   };
 }
 
+const GROUP_WINDOW_MS = 5 * 60 * 1000; // messages within 5 min of the same author are grouped
+
 function renderMessage(msg) {
-  const div = document.createElement('div');
-  div.className = 'msg';
-  const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  div.innerHTML = `<span class="author">${escapeHtml(msg.username)}</span><span class="time">${time}</span>
-                    <div class="content">${escapeHtml(msg.content)}</div>`;
-  $('messages').appendChild(div);
+  const time = new Date(msg.created_at);
+  const timeLabel = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const canGroup = lastRenderedMsg &&
+    lastRenderedMsg.username === msg.username &&
+    (time - lastRenderedMsg.time) < GROUP_WINDOW_MS;
+
+  if (canGroup) {
+    const line = document.createElement('div');
+    line.className = 'msg-line';
+    line.innerHTML = msg.content ? `${escapeHtml(msg.content)}<span class="time-inline">${timeLabel}</span>` : `<span class="time-inline">${timeLabel}</span>`;
+    lastRenderedMsg.bodyEl.appendChild(line);
+    if (msg.attachment_url) lastRenderedMsg.bodyEl.appendChild(renderAttachment(msg));
+  } else {
+    const group = document.createElement('div');
+    group.className = 'msg-group';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'msg-avatar';
+
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    body.innerHTML = `<div class="msg-header"><span class="author">${escapeHtml(msg.username)}</span><span class="time">${timeLabel}</span></div>`;
+
+    const line = document.createElement('div');
+    line.className = 'msg-line';
+    if (msg.content) line.textContent = msg.content;
+    body.appendChild(line);
+    if (msg.attachment_url) body.appendChild(renderAttachment(msg));
+
+    group.appendChild(avatar);
+    group.appendChild(body);
+    $('messages').appendChild(group);
+
+    lastRenderedMsg = { username: msg.username, time, bodyEl: body };
+  }
+
+  lastRenderedMsg.time = time;
 }
 
 function escapeHtml(str) {
@@ -172,6 +227,79 @@ function sendMessage() {
   input.value = '';
 }
 
-// ---- Init ----
+function renderAttachment(msg) {
+  if (msg.attachment_type === 'image') {
+    const img = document.createElement('img');
+    img.className = 'attachment-img';
+    img.src = msg.attachment_url;
+    img.loading = 'lazy';
+    img.onclick = () => window.open(msg.attachment_url, '_blank');
+    return img;
+  }
+  const audio = document.createElement('audio');
+  audio.className = 'attachment-audio';
+  audio.src = msg.attachment_url;
+  audio.controls = true;
+  return audio;
+}
+
+// ---- File upload (direct browser -> R2, never touches the backend) ----
+$('btn-attach').onclick = () => $('file-input').click();
+
+$('file-input').onchange = async () => {
+  const file = $('file-input').files[0];
+  $('file-input').value = '';
+  if (!file || !currentChannel) return;
+
+  const isImage = file.type.startsWith('image/');
+  const isAudio = file.type.startsWith('audio/');
+  if (!isImage && !isAudio) {
+    alert('Only image and audio files are supported.');
+    return;
+  }
+
+  const progressEl = $('upload-progress');
+  progressEl.classList.remove('hidden');
+  progressEl.textContent = `Uploading ${file.name}... 0%`;
+
+  try {
+    const { uploadUrl, key } = await api('/uploads/presign', {
+      method: 'POST',
+      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+    });
+
+    await uploadDirectToStorage(uploadUrl, file, (pct) => {
+      progressEl.textContent = `Uploading ${file.name}... ${pct}%`;
+    });
+
+    progressEl.classList.add('hidden');
+
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({
+        type: 'message',
+        content: '',
+        attachmentKey: key,
+        attachmentType: isImage ? 'image' : 'audio',
+      }));
+    }
+  } catch (err) {
+    progressEl.classList.add('hidden');
+    alert('Upload failed: ' + err.message);
+  }
+};
+
+function uploadDirectToStorage(uploadUrl, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('Storage rejected the upload')));
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.send(file);
+  });
+}
 if (token && me) showApp();
 else showAuth();

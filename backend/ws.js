@@ -1,6 +1,7 @@
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import { pool } from './db.js';
+import { getDownloadUrl } from './storage.js';
 
 export function attachWebSocket(server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
@@ -49,11 +50,14 @@ export function attachWebSocket(server) {
 
       if (msg.type === 'message' && ws.channelId) {
         const content = String(msg.content || '').slice(0, 4000).trim();
-        if (!content) return;
+        const attachmentKey = msg.attachmentKey ? String(msg.attachmentKey).slice(0, 500) : null;
+        const attachmentType = ['image', 'audio'].includes(msg.attachmentType) ? msg.attachmentType : null;
+        if (!content && !attachmentKey) return;
 
         const result = await pool.query(
-          'INSERT INTO messages (channel_id, user_id, content) VALUES ($1, $2, $3) RETURNING id, created_at',
-          [ws.channelId, user.id, content]
+          `INSERT INTO messages (channel_id, user_id, content, attachment_url, attachment_type)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
+          [ws.channelId, user.id, content, attachmentKey, attachmentType]
         );
 
         const payload = JSON.stringify({
@@ -62,6 +66,8 @@ export function attachWebSocket(server) {
           channelId: ws.channelId,
           username: user.username,
           content,
+          attachment_url: attachmentKey ? await getDownloadUrl(attachmentKey) : null,
+          attachment_type: attachmentType,
           created_at: result.rows[0].created_at,
         });
 
