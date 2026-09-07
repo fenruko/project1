@@ -227,6 +227,14 @@ function sendMessage() {
   input.value = '';
 }
 
+function formatBytes(bytes) {
+  if (!bytes) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+  return `${bytes.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 function renderAttachment(msg) {
   if (msg.attachment_type === 'image') {
     const img = document.createElement('img');
@@ -236,14 +244,37 @@ function renderAttachment(msg) {
     img.onclick = () => window.open(msg.attachment_url, '_blank');
     return img;
   }
-  const audio = document.createElement('audio');
-  audio.className = 'attachment-audio';
-  audio.src = msg.attachment_url;
-  audio.controls = true;
-  return audio;
+  if (msg.attachment_type === 'video') {
+    const video = document.createElement('video');
+    video.className = 'attachment-video';
+    video.src = msg.attachment_url;
+    video.controls = true;
+    return video;
+  }
+  if (msg.attachment_type === 'audio') {
+    const audio = document.createElement('audio');
+    audio.className = 'attachment-audio';
+    audio.src = msg.attachment_url;
+    audio.controls = true;
+    return audio;
+  }
+  // Generic file - any other type
+  const link = document.createElement('a');
+  link.className = 'attachment-file';
+  link.href = msg.attachment_url;
+  link.target = '_blank';
+  link.download = msg.attachment_name || '';
+  link.innerHTML = `
+    <span class="file-icon">📄</span>
+    <span class="file-meta">
+      <div class="file-name">${escapeHtml(msg.attachment_name || 'file')}</div>
+      <div class="file-size">${formatBytes(msg.attachment_size)}</div>
+    </span>
+  `;
+  return link;
 }
 
-// ---- File upload (direct browser -> R2, never touches the backend) ----
+// ---- File upload (direct browser -> Backblaze, never touches the backend) ----
 $('btn-attach').onclick = () => $('file-input').click();
 
 $('file-input').onchange = async () => {
@@ -251,12 +282,10 @@ $('file-input').onchange = async () => {
   $('file-input').value = '';
   if (!file || !currentChannel) return;
 
-  const isImage = file.type.startsWith('image/');
-  const isAudio = file.type.startsWith('audio/');
-  if (!isImage && !isAudio) {
-    alert('Only image and audio files are supported.');
-    return;
-  }
+  let attachmentType = 'file';
+  if (file.type.startsWith('image/')) attachmentType = 'image';
+  else if (file.type.startsWith('audio/')) attachmentType = 'audio';
+  else if (file.type.startsWith('video/')) attachmentType = 'video';
 
   const progressEl = $('upload-progress');
   progressEl.classList.remove('hidden');
@@ -265,7 +294,7 @@ $('file-input').onchange = async () => {
   try {
     const { uploadUrl, key } = await api('/uploads/presign', {
       method: 'POST',
-      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }),
+      body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream', size: file.size }),
     });
 
     await uploadDirectToStorage(uploadUrl, file, (pct) => {
@@ -279,7 +308,9 @@ $('file-input').onchange = async () => {
         type: 'message',
         content: '',
         attachmentKey: key,
-        attachmentType: isImage ? 'image' : 'audio',
+        attachmentType,
+        attachmentName: file.name,
+        attachmentSize: file.size,
       }));
     }
   } catch (err) {

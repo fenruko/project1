@@ -87,7 +87,8 @@ router.get('/:id/messages', async (req, res) => {
   if (!isMember) return res.status(403).json({ error: 'Not a member of this channel' });
 
   const result = await pool.query(
-    `SELECT m.id, m.content, m.attachment_url AS attachment_key, m.attachment_type, m.created_at, u.username
+    `SELECT m.id, m.content, m.attachment_url AS attachment_key, m.attachment_type,
+            m.attachment_name, m.attachment_size, m.created_at, u.username
      FROM messages m
      JOIN users u ON u.id = m.user_id
      WHERE m.channel_id = $1

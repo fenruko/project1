@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL,
   attachment_url TEXT,
   attachment_type TEXT,
+  attachment_name TEXT,
+  attachment_size BIGINT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

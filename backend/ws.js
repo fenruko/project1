@@ -51,13 +51,15 @@ export function attachWebSocket(server) {
       if (msg.type === 'message' && ws.channelId) {
         const content = String(msg.content || '').slice(0, 4000).trim();
         const attachmentKey = msg.attachmentKey ? String(msg.attachmentKey).slice(0, 500) : null;
-        const attachmentType = ['image', 'audio'].includes(msg.attachmentType) ? msg.attachmentType : null;
+        const attachmentType = ['image', 'audio', 'video', 'file'].includes(msg.attachmentType) ? msg.attachmentType : null;
+        const attachmentName = msg.attachmentName ? String(msg.attachmentName).slice(0, 255) : null;
+        const attachmentSize = Number.isFinite(msg.attachmentSize) ? msg.attachmentSize : null;
         if (!content && !attachmentKey) return;
 
         const result = await pool.query(
-          `INSERT INTO messages (channel_id, user_id, content, attachment_url, attachment_type)
-           VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
-          [ws.channelId, user.id, content, attachmentKey, attachmentType]
+          `INSERT INTO messages (channel_id, user_id, content, attachment_url, attachment_type, attachment_name, attachment_size)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at`,
+          [ws.channelId, user.id, content, attachmentKey, attachmentType, attachmentName, attachmentSize]
         );
 
         const payload = JSON.stringify({
@@ -68,6 +70,8 @@ export function attachWebSocket(server) {
           content,
           attachment_url: attachmentKey ? await getDownloadUrl(attachmentKey) : null,
           attachment_type: attachmentType,
+          attachment_name: attachmentName,
+          attachment_size: attachmentSize,
           created_at: result.rows[0].created_at,
         });
 

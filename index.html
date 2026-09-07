@@ -50,7 +50,21 @@
       <div class="voice-controls">
         <button id="btn-mute" class="vc-btn" title="Mute">🎤</button>
         <button id="btn-deafen" class="vc-btn" title="Deafen">🎧</button>
+        <button id="btn-camera" class="vc-btn" title="Camera">📷</button>
+        <button id="btn-screenshare" class="vc-btn" title="Share screen">🖥️</button>
+        <button id="btn-voice-settings" class="vc-btn" title="Voice settings">⚙️</button>
         <button id="btn-leave-voice" class="vc-btn vc-leave" title="Leave">📞</button>
+      </div>
+      <div id="voice-settings" class="voice-settings hidden">
+        <label>Microphone
+          <select id="select-mic"></select>
+        </label>
+        <label>Speaker
+          <select id="select-speaker"></select>
+        </label>
+        <label>Camera
+          <select id="select-camera"></select>
+        </label>
       </div>
     </div>
   </div>
@@ -60,10 +74,11 @@
       <span id="channel-title">Select a channel</span>
       <button id="btn-join-voice" class="hidden">🎙 Join Voice</button>
     </div>
+    <div id="video-grid" class="hidden"></div>
     <div id="messages"></div>
     <div id="composer" class="hidden">
-      <button id="btn-attach" title="Attach image or audio">📎</button>
-      <input id="file-input" type="file" accept="image/*,audio/*" class="hidden">
+      <button id="btn-attach" title="Attach a file">📎</button>
+      <input id="file-input" type="file" class="hidden">
       <input id="message-input" placeholder="Type a message...">
       <button id="btn-send">Send</button>
     </div>
