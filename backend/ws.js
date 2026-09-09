@@ -1,11 +1,18 @@
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import { pool } from './db.js';
-import { getDownloadUrl } from './storage.js';
+import { getDownloadUrl, getAvatarUrl } from './storage.js';
 
 export function attachWebSocket(server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
   const rooms = new Map(); // channelId -> Set<ws>
+
+  function broadcast(channelId, payload) {
+    const data = JSON.stringify(payload);
+    for (const client of rooms.get(channelId) || []) {
+      if (client.readyState === 1) client.send(data);
+    }
+  }
 
   wss.on('connection', (ws, req) => {
     const url = new URL(req.url, 'http://localhost');
@@ -62,11 +69,15 @@ export function attachWebSocket(server) {
           [ws.channelId, user.id, content, attachmentKey, attachmentType, attachmentName, attachmentSize]
         );
 
-        const payload = JSON.stringify({
+        const avatarRow = (await pool.query('SELECT avatar_type, avatar_value FROM users WHERE id = $1', [user.id])).rows[0];
+
+        broadcast(ws.channelId, {
           type: 'message',
           id: result.rows[0].id,
           channelId: ws.channelId,
+          userId: user.id,
           username: user.username,
+          avatar_url: await getAvatarUrl(avatarRow?.avatar_type, avatarRow?.avatar_value),
           content,
           attachment_url: attachmentKey ? await getDownloadUrl(attachmentKey) : null,
           attachment_type: attachmentType,
@@ -74,10 +85,40 @@ export function attachWebSocket(server) {
           attachment_size: attachmentSize,
           created_at: result.rows[0].created_at,
         });
+      }
 
-        for (const client of rooms.get(ws.channelId) || []) {
-          if (client.readyState === 1) client.send(payload);
-        }
+      if (msg.type === 'edit' && ws.channelId) {
+        const content = String(msg.content || '').slice(0, 4000).trim();
+        if (!content || !msg.id) return;
+
+        const result = await pool.query(
+          `UPDATE messages SET content = $1, edited_at = now()
+           WHERE id = $2 AND channel_id = $3 AND user_id = $4 AND deleted = false
+           RETURNING edited_at`,
+          [content, msg.id, ws.channelId, user.id]
+        );
+        if (result.rows.length === 0) return; // not the owner, or message doesn't exist
+
+        broadcast(ws.channelId, {
+          type: 'edit',
+          id: msg.id,
+          channelId: ws.channelId,
+          content,
+          edited_at: result.rows[0].edited_at,
+        });
+      }
+
+      if (msg.type === 'delete' && ws.channelId) {
+        if (!msg.id) return;
+        const result = await pool.query(
+          `UPDATE messages SET deleted = true
+           WHERE id = $1 AND channel_id = $2 AND user_id = $3
+           RETURNING id`,
+          [msg.id, ws.channelId, user.id]
+        );
+        if (result.rows.length === 0) return;
+
+        broadcast(ws.channelId, { type: 'delete', id: msg.id, channelId: ws.channelId });
       }
     });
 

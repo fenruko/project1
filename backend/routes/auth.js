@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db.js';
+import { getAvatarUrl } from '../storage.js';
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.post('/signup', async (req, res) => {
       [username.trim(), hash]
     );
     const user = result.rows[0];
-    res.json({ token: makeToken(user), user });
+    res.json({ token: makeToken(user), user: { ...user, avatarUrl: null } });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Username already taken' });
     console.error(err);
@@ -44,7 +45,8 @@ router.post('/login', async (req, res) => {
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
-  res.json({ token: makeToken(user), user: { id: user.id, username: user.username } });
+  const avatarUrl = await getAvatarUrl(user.avatar_type, user.avatar_value);
+  res.json({ token: makeToken(user), user: { id: user.id, username: user.username, avatarUrl } });
 });
 
 export default router;

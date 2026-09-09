@@ -11,6 +11,7 @@ export const s3 = new S3Client({
 });
 
 const DOWNLOAD_URL_TTL = 6 * 60 * 60; // 6 hours - plenty for a normal chat session
+const AVATAR_URL_TTL = 6 * 24 * 60 * 60; // 6 days (S3-style presigned URLs cap out at 7 days)
 
 export async function getUploadUrl(key, contentType) {
   const command = new PutObjectCommand({
@@ -28,4 +29,14 @@ export async function getDownloadUrl(key) {
     Key: key,
   });
   return getSignedUrl(s3, command, { expiresIn: DOWNLOAD_URL_TTL });
+}
+
+export async function getAvatarUrl(avatarType, avatarValue) {
+  if (!avatarType || !avatarValue) return null;
+  if (avatarType === 'external') return avatarValue; // e.g. a permanent GIPHY URL
+  const command = new GetObjectCommand({
+    Bucket: process.env.B2_BUCKET_NAME,
+    Key: avatarValue,
+  });
+  return getSignedUrl(s3, command, { expiresIn: AVATAR_URL_TTL });
 }

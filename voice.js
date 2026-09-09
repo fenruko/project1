@@ -5,6 +5,9 @@ let vkMuted = false;
 let vkDeafened = false;
 let vkCameraOn = false;
 let vkScreenOn = false;
+let vkExpanded = false;
+
+const SCREEN_SHARE_SUPPORTED = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 
 // High-quality audio publish settings (LiveKit defaults are low-bitrate speech mode,
 // which is the main reason default voice quality sounds bad).
@@ -26,6 +29,11 @@ function saveDevicePref(kind, deviceId) {
 }
 function loadDevicePref(kind) {
   return localStorage.getItem('device_' + kind) || undefined;
+}
+
+if (!SCREEN_SHARE_SUPPORTED) {
+  $('float-btn-screenshare').disabled = true;
+  $('float-btn-screenshare').title = 'Screen sharing is not supported on this device/browser';
 }
 
 async function joinVoice(channelId) {
@@ -108,6 +116,8 @@ async function leaveVoice() {
   $('btn-join-voice').textContent = '🎙 Join Voice';
   document.querySelectorAll('audio[data-participant-identity]').forEach((el) => el.remove());
   $('video-grid').innerHTML = '';
+  $('voice-float-video-grid').innerHTML = '';
+  minimizeVoiceWindow();
   updateVideoGridVisibility();
 }
 
@@ -120,46 +130,56 @@ function qualityTier(quality) {
 
 function renderVoiceParticipants() {
   if (!vkRoom) return;
-  const container = $('voice-participants');
-  container.innerHTML = '';
+  [$('voice-participants'), $('voice-float-participants')].forEach((container) => {
+    if (!container) return;
+    const large = container.id === 'voice-float-participants';
+    container.innerHTML = '';
 
-  const all = [vkRoom.localParticipant, ...vkRoom.remoteParticipants.values()];
-  all.forEach((p) => {
-    const row = document.createElement('div');
-    row.className = 'vp-row';
+    const all = [vkRoom.localParticipant, ...vkRoom.remoteParticipants.values()];
+    all.forEach((p) => {
+      const row = document.createElement('div');
+      row.className = 'vp-row' + (large ? ' vp-row-large' : '');
 
-    const tier = qualityTier(p.connectionQuality);
-    const isLocal = p === vkRoom.localParticipant;
-    const micOn = isLocal ? !vkMuted : [...p.audioTrackPublications.values()].some((pub) => !pub.isMuted);
+      const tier = qualityTier(p.connectionQuality);
+      const isLocal = p === vkRoom.localParticipant;
+      const micOn = isLocal ? !vkMuted : [...p.audioTrackPublications.values()].some((pub) => !pub.isMuted);
 
-    row.innerHTML = `
-      <div class="vp-avatar"><span class="vp-latency ${tier}"></span></div>
-      <span class="vp-name">${escapeHtml(p.name || p.identity)}${isLocal ? ' (you)' : ''}</span>
-      <span class="vp-muted">${micOn ? '' : '🔇'}</span>
-    `;
+      row.innerHTML = `
+        <div class="vp-avatar-wrap">
+          <img class="vp-avatar" src="${userAvatars.get(p.identity) || DEFAULT_AVATAR}" alt="">
+          <span class="vp-latency ${tier}"></span>
+        </div>
+        <span class="vp-name">${escapeHtml(p.name || p.identity)}${isLocal ? ' (you)' : ''}</span>
+        <span class="vp-muted">${micOn ? '' : '🔇'}</span>
+      `;
 
-    if (!isLocal) {
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.min = '0';
-      slider.max = '2';
-      slider.step = '0.1';
-      slider.value = '1';
-      slider.className = 'vp-volume';
-      slider.oninput = () => {
-        document.querySelectorAll(`audio[data-participant-identity="${p.identity}"]`)
-          .forEach((el) => { el.volume = Math.min(1, slider.value); });
-      };
-      row.appendChild(slider);
-    }
+      if (!isLocal) {
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '0';
+        slider.max = '2';
+        slider.step = '0.1';
+        slider.value = '1';
+        slider.className = 'vp-volume';
+        slider.oninput = () => {
+          document.querySelectorAll(`audio[data-participant-identity="${p.identity}"]`)
+            .forEach((el) => { el.volume = Math.min(1, slider.value); });
+        };
+        row.appendChild(slider);
+      }
 
-    container.appendChild(row);
+      container.appendChild(row);
+    });
   });
 }
 
 // ---- Video (camera + screen share) ----
+function activeVideoGrid() {
+  return vkExpanded ? $('voice-float-video-grid') : $('video-grid');
+}
+
 function attachVideoTile(track, participant, isScreenShare) {
-  const grid = $('video-grid');
+  const grid = activeVideoGrid();
   const el = track.attach();
   el.className = 'video-tile-el';
   el.dataset.trackSid = track.sid;
@@ -178,27 +198,104 @@ function attachVideoTile(track, participant, isScreenShare) {
 }
 
 function updateVideoGridVisibility() {
-  const grid = $('video-grid');
-  grid.classList.toggle('hidden', grid.children.length === 0);
+  [$('video-grid'), $('voice-float-video-grid')].forEach((grid) => {
+    grid.classList.toggle('hidden', grid.children.length === 0);
+  });
 }
 
-$('btn-camera').onclick = async () => {
+// ---- Pop-out voice window (Discord-style) ----
+function expandVoiceWindow() {
+  if (!vkRoom) return;
+  vkExpanded = true;
+  $('voice-float').classList.remove('hidden');
+  // Move any live video tiles into the floating grid without interrupting playback
+  const from = $('video-grid');
+  const to = $('voice-float-video-grid');
+  while (from.firstChild) to.appendChild(from.firstChild);
+  updateVideoGridVisibility();
+}
+
+function minimizeVoiceWindow() {
+  vkExpanded = false;
+  $('voice-float').classList.add('hidden');
+  const from = $('voice-float-video-grid');
+  const to = $('video-grid');
+  while (from.firstChild) to.appendChild(from.firstChild);
+  updateVideoGridVisibility();
+}
+
+$('btn-expand-voice').onclick = expandVoiceWindow;
+$('btn-minimize-voice').onclick = minimizeVoiceWindow;
+
+// Make the floating window draggable by its header
+(() => {
+  const win = $('voice-float');
+  const handle = $('voice-float-header');
+  let dragging = false, offsetX = 0, offsetY = 0;
+  handle.addEventListener('mousedown', (e) => {
+    dragging = true;
+    offsetX = e.clientX - win.offsetLeft;
+    offsetY = e.clientY - win.offsetTop;
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    win.style.left = `${e.clientX - offsetX}px`;
+    win.style.top = `${e.clientY - offsetY}px`;
+    win.style.right = 'auto';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+// ---- Controls (mirrored between the sidebar bar and the pop-out window) ----
+function toggleMute() {
+  if (!vkRoom) return;
+  vkMuted = !vkMuted;
+  vkRoom.localParticipant.setMicrophoneEnabled(!vkMuted);
+  [$('btn-mute'), $('float-btn-mute')].forEach((b) => b.classList.toggle('active', vkMuted));
+  renderVoiceParticipants();
+}
+function toggleDeafen() {
+  if (!vkRoom) return;
+  vkDeafened = !vkDeafened;
+  [$('btn-deafen'), $('float-btn-deafen')].forEach((b) => b.classList.toggle('active', vkDeafened));
+  document.querySelectorAll('audio[data-participant-identity]').forEach((el) => { el.muted = vkDeafened; });
+  if (vkDeafened && !vkMuted) toggleMute();
+}
+
+$('btn-mute').onclick = toggleMute;
+$('float-btn-mute').onclick = toggleMute;
+$('btn-deafen').onclick = toggleDeafen;
+$('float-btn-deafen').onclick = toggleDeafen;
+$('btn-leave-voice').onclick = leaveVoice;
+$('float-btn-leave').onclick = leaveVoice;
+
+$('float-btn-camera').onclick = async () => {
   if (!vkRoom) return;
   vkCameraOn = !vkCameraOn;
   const savedCam = loadDevicePref('videoinput');
   await vkRoom.localParticipant.setCameraEnabled(vkCameraOn, savedCam ? { deviceId: savedCam } : undefined);
-  $('btn-camera').classList.toggle('active', vkCameraOn);
+  $('float-btn-camera').classList.toggle('active', vkCameraOn);
 };
 
-$('btn-screenshare').onclick = async () => {
-  if (!vkRoom) return;
+$('float-btn-screenshare').onclick = async () => {
+  if (!vkRoom || !SCREEN_SHARE_SUPPORTED) return;
   vkScreenOn = !vkScreenOn;
   try {
     await vkRoom.localParticipant.setScreenShareEnabled(vkScreenOn);
   } catch {
     vkScreenOn = false; // user cancelled the browser's screen picker
   }
-  $('btn-screenshare').classList.toggle('active', vkScreenOn);
+  $('float-btn-screenshare').classList.toggle('active', vkScreenOn);
+};
+
+$('float-btn-settings').onclick = () => {
+  $('voice-settings').classList.toggle('hidden');
+  refreshDeviceLists();
+};
+
+$('btn-join-voice').onclick = () => {
+  if (vkRoom) return leaveVoice();
+  if (currentChannel) joinVoice(currentChannel.id);
 };
 
 // ---- Device selection ----
@@ -247,37 +344,6 @@ $('select-speaker').onchange = async (e) => {
   if (vkRoom && vkRoom.switchActiveDevice) {
     try { await vkRoom.switchActiveDevice('audiooutput', e.target.value); } catch (err) { /* unsupported in this browser */ }
   }
-};
-
-$('btn-voice-settings').onclick = () => {
-  $('voice-settings').classList.toggle('hidden');
-  refreshDeviceLists();
-};
-
-$('btn-join-voice').onclick = () => {
-  if (vkRoom) return leaveVoice();
-  if (currentChannel) joinVoice(currentChannel.id);
-};
-
-$('btn-leave-voice').onclick = leaveVoice;
-
-$('btn-mute').onclick = async () => {
-  if (!vkRoom) return;
-  vkMuted = !vkMuted;
-  await vkRoom.localParticipant.setMicrophoneEnabled(!vkMuted);
-  $('btn-mute').classList.toggle('active', vkMuted);
-  renderVoiceParticipants();
-};
-
-$('btn-deafen').onclick = () => {
-  if (!vkRoom) return;
-  vkDeafened = !vkDeafened;
-  $('btn-deafen').classList.toggle('active', vkDeafened);
-  document.querySelectorAll('audio[data-participant-identity]').forEach((el) => {
-    el.muted = vkDeafened;
-  });
-  // Deafening also mutes your own mic, like Discord
-  if (vkDeafened && !vkMuted) $('btn-mute').click();
 };
 
 navigator.mediaDevices?.addEventListener?.('devicechange', refreshDeviceLists);

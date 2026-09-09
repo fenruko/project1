@@ -7,6 +7,7 @@ import authRoutes from './routes/auth.js';
 import channelRoutes from './routes/channels.js';
 import voiceRoutes from './routes/voice.js';
 import uploadRoutes from './routes/uploads.js';
+import avatarRoutes from './routes/avatar.js';
 import { attachWebSocket } from './ws.js';
 
 dotenv.config();
@@ -19,6 +20,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/voice', voiceRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/avatar', avatarRoutes);
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 const server = http.createServer(app);

@@ -2,7 +2,7 @@ import express from 'express';
 import { nanoid } from 'nanoid';
 import { pool } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
-import { getDownloadUrl } from '../storage.js';
+import { getDownloadUrl, getAvatarUrl } from '../storage.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -87,11 +87,12 @@ router.get('/:id/messages', async (req, res) => {
   if (!isMember) return res.status(403).json({ error: 'Not a member of this channel' });
 
   const result = await pool.query(
-    `SELECT m.id, m.content, m.attachment_url AS attachment_key, m.attachment_type,
-            m.attachment_name, m.attachment_size, m.created_at, u.username
+    `SELECT m.id, m.user_id AS "userId", m.content, m.attachment_url AS attachment_key, m.attachment_type,
+            m.attachment_name, m.attachment_size, m.edited_at, m.created_at, u.username,
+            u.avatar_type, u.avatar_value
      FROM messages m
      JOIN users u ON u.id = m.user_id
-     WHERE m.channel_id = $1
+     WHERE m.channel_id = $1 AND m.deleted = false
      ORDER BY m.created_at DESC
      LIMIT 50`,
     [req.params.id]
@@ -101,6 +102,7 @@ router.get('/:id/messages', async (req, res) => {
     result.rows.map(async (row) => ({
       ...row,
       attachment_url: row.attachment_key ? await getDownloadUrl(row.attachment_key) : null,
+      avatar_url: await getAvatarUrl(row.avatar_type, row.avatar_value),
     }))
   );
 
